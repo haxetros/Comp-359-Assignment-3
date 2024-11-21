@@ -1,3 +1,8 @@
+import tkinter as tk
+from tkinter import ttk
+import random
+
+
 class Client:
     """
     Represents an object (client) in the spatial hash grid.
@@ -137,28 +142,114 @@ class SpatialHashGrid:
         return (self.bounds[1][1] - self.bounds[1][0]) / self.dimensions[1]
 
 
-# Example usage (for testing):
+class SpatialHashGridVisualizer:
+    """
+    Visualizes the spatial hash grid using tkinter.
+    Includes object reporting and state visualization.
+    """
+    def __init__(self, grid, width, height):
+        self.grid = grid
+        self.width = width
+        self.height = height
+        self.root = tk.Tk()
+        self.root.title("Spatial Hash Grid Visualization")
+
+        # Top explanation frame
+        self.top_frame = tk.Frame(self.root)
+        self.top_frame.pack(side=tk.TOP, fill=tk.X)
+        self.heading = tk.Label(self.top_frame, text="Spatial Hash Grid", font=("Arial", 18, "bold"))
+        self.heading.pack(pady=5)
+        self.explanation = tk.Label(
+            self.top_frame,
+            text=("This visualization demonstrates the use of a spatial hash grid for efficiently managing moving objects. "
+                  "Objects are tracked in cells, allowing fast lookup for nearby items."),
+            wraplength=600,
+            justify="center",
+        )
+        self.explanation.pack(pady=5)
+
+        # Left canvas for visualization
+        self.canvas = tk.Canvas(self.root, width=width, height=height, bg="white")
+        self.canvas.pack(side=tk.LEFT)
+
+        # Right panel for reporting
+        self.right_frame = ttk.Frame(self.root, width=300, height=height)
+        self.right_frame.pack(side=tk.RIGHT, fill=tk.Y)
+        self.right_frame.pack_propagate(False)
+        self.report_label = tk.Label(self.right_frame, text="Object States:", font=("Arial", 14, "bold"))
+        self.report_label.pack(anchor="w", padx=10, pady=5)
+        self.report = tk.Text(self.right_frame, height=25, wrap=tk.WORD)
+        self.report.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.objects = []
+        self.previous_states = {}  # Track previous color states by object name
+
+    def add_random_objects(self, count):
+        for i in range(count):
+            x = random.randint(0, self.width)
+            y = random.randint(0, self.height)
+            size = random.randint(10, 30)
+            obj = self.grid.new_client((x, y), (size, size), f"Obj-{i}")
+            color = "blue"
+            self.objects.append(
+                (
+                    obj,
+                    self.canvas.create_oval(
+                        x - size / 2,
+                        y - size / 2,
+                        x + size / 2,
+                        y + size / 2,
+                        fill=color,
+                    ),
+                    self.canvas.create_text(x, y, text=obj.name, fill="black"),
+                )
+            )
+            self.previous_states[obj.name] = "blue"  # Initialize state by name
+
+    def update_positions(self):
+        for obj, oval, label in self.objects:
+            dx = random.randint(-5, 5)
+            dy = random.randint(-5, 5)
+            new_x = min(max(obj.position[0] + dx, 0), self.width)
+            new_y = min(max(obj.position[1] + dy, 0), self.height)
+            self.grid.update_client(obj, (new_x, new_y))
+            self.canvas.move(oval, dx, dy)
+            self.canvas.move(label, dx, dy)
+
+    def find_nearby(self, position, radius):
+        nearby_objects = self.grid.find_nearby(position, (radius * 2, radius * 2))
+        updated_states = {}
+        for obj, oval, label in self.objects:
+            if obj in nearby_objects:
+                self.previous_states[obj.name] = "green"
+                self.canvas.itemconfig(oval, fill="green")
+            else:
+                self.previous_states[obj.name] = "blue"
+                self.canvas.itemconfig(oval, fill="blue")
+            updated_states[obj.name] = self.previous_states[obj.name]
+        self.update_report(updated_states)
+
+    def update_report(self, states):
+        self.report.delete(1.0, tk.END)
+        for name, state in states.items():
+            self.report.insert(tk.END, f"{name}: {state}\n")
+
+    def run(self):
+        def update_loop():
+            self.update_positions()
+            self.find_nearby((self.width // 2, self.height // 2), 100)
+            self.root.after(100, update_loop)
+
+        update_loop()
+        self.root.mainloop()
+
+
 if __name__ == "__main__":
     # Define grid bounds and dimensions
     bounds = [(0, 800), (0, 600)]
     dimensions = (10, 10)  # 10x10 grid
-
-    # Initialize the spatial hash grid
     grid = SpatialHashGrid(bounds, dimensions)
 
-    # Add some test clients
-    client1 = grid.new_client((100, 150), (30, 30), "Client1")
-    client2 = grid.new_client((400, 300), (50, 50), "Client2")
-
-    # Query nearby objects
-    print("Nearby objects:", [obj.name for obj in grid.find_nearby((120, 160), (100, 100))])
-
-    # Update a client's position
-    print("\nUpdating Client1's position...")
-    grid.update_client(client1, (200, 250))
-    print("Nearby objects after update:", [obj.name for obj in grid.find_nearby((200, 250), (100, 100))])
-
-    # Delete a client
-    print("\nDeleting Client2...")
-    grid.delete_client(client2)
-    print("Nearby objects after deletion:", [obj.name for obj in grid.find_nearby((400, 300), (100, 100))])
+    visualizer = SpatialHashGridVisualizer(grid, 800, 600)
+    visualizer.add_random_objects(30)
+    visualizer.run()
