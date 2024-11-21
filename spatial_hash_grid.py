@@ -1,7 +1,6 @@
 class Client:
     """
     Represents an object (client) in the spatial hash grid.
-    
     Attributes:
         position (tuple): (x, y) coordinates of the object.
         dimensions (tuple): Width and height of the object.
@@ -13,6 +12,12 @@ class Client:
         self.name = name
         self.indices = None  # Stores the range of grid cells the object occupies
 
+    def __eq__(self, other):
+        return isinstance(other, Client) and self.position == other.position and self.dimensions == other.dimensions
+
+    def __hash__(self):
+        return hash((self.position, self.dimensions, self.name))
+
 
 class SpatialHashGrid:
     """
@@ -21,7 +26,6 @@ class SpatialHashGrid:
     def __init__(self, bounds, dimensions):
         """
         Initializes the grid.
-        
         Args:
             bounds (list of tuples): [(min_x, max_x), (min_y, max_y)] defines the grid's boundaries.
             dimensions (tuple): Number of cells in (x, y).
@@ -33,12 +37,10 @@ class SpatialHashGrid:
     def new_client(self, position, dimensions, name):
         """
         Adds a new object to the grid.
-        
         Args:
             position (tuple): (x, y) coordinates of the object.
             dimensions (tuple): Width and height of the object.
             name (str): Identifier for the object.
-        
         Returns:
             Client: The created object.
         """
@@ -62,11 +64,9 @@ class SpatialHashGrid:
     def find_nearby(self, position, dimensions):
         """
         Finds all objects near a given position within specified dimensions.
-        
         Args:
             position (tuple): (x, y) coordinates of the query point.
             dimensions (tuple): Search area width and height.
-        
         Returns:
             list: A list of nearby objects.
         """
@@ -78,6 +78,35 @@ class SpatialHashGrid:
                 if key in self.cell_map:
                     nearby.update(self.cell_map[key])
         return list(nearby)
+
+    def update_client(self, client, new_position):
+        """
+        Updates the position of an existing client.
+        Args:
+            client (Client): The client to update.
+            new_position (tuple): The new (x, y) coordinates for the client.
+        """
+        self.delete_client(client)  # Remove the client from its old cells
+        client.position = new_position  # Update the client's position
+        self.insert_client(client)  # Reinsert the client into the grid
+
+    def delete_client(self, client):
+        """
+        Removes a client from the grid.
+        Args:
+            client (Client): The client to delete.
+        """
+        if not client.indices:
+            return  # If the client has no assigned cells, do nothing
+        min_cell, max_cell = client.indices
+        for x in range(min_cell[0], max_cell[0] + 1):
+            for y in range(min_cell[1], max_cell[1] + 1):
+                key = self.get_cell_key(x, y)
+                if key in self.cell_map:
+                    self.cell_map[key].discard(client)  # Remove the client from the cell
+                    if not self.cell_map[key]:  # If the cell is empty, delete it
+                        del self.cell_map[key]
+        client.indices = None  # Clear the client's cell indices
 
     def get_cell_range(self, position, dimensions):
         """
@@ -122,5 +151,14 @@ if __name__ == "__main__":
     client2 = grid.new_client((400, 300), (50, 50), "Client2")
 
     # Query nearby objects
-    nearby_objects = grid.find_nearby((120, 160), (100, 100))
-    print("Nearby objects:", [obj.name for obj in nearby_objects])
+    print("Nearby objects:", [obj.name for obj in grid.find_nearby((120, 160), (100, 100))])
+
+    # Update a client's position
+    print("\nUpdating Client1's position...")
+    grid.update_client(client1, (200, 250))
+    print("Nearby objects after update:", [obj.name for obj in grid.find_nearby((200, 250), (100, 100))])
+
+    # Delete a client
+    print("\nDeleting Client2...")
+    grid.delete_client(client2)
+    print("Nearby objects after deletion:", [obj.name for obj in grid.find_nearby((400, 300), (100, 100))])
